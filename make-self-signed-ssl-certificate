@@ -1,0 +1,19 @@
+#!/bin/bash
+usage="
+Usage: $0 domain_name Examples:
+  $0 www.a.com
+  $0 *.b.com
+" 
+
+d="$1" # domain common name
+f="${d//\*/wildcard}" # key file name by common name
+e="admin@${d##\*\.}"  # email by pure common name
+
+if [[ $d =~ .+\..* ]]; then
+  openssl req -newkey rsa:4096 -nodes \
+  -keyout ${f}.key -x509 -days 3650 \
+  -out ${f}.crt \
+  -subj "/C=CN/ST=BJ/L=Chaoyang/O=MyCompany/OU=QA/CN=${d}/emailAddress=${e}/"
+else
+  echo "$usage"
+fi
