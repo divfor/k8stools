@@ -1,0 +1,10 @@
+#!/bin/bash
+f=k8srequired
+[ -s $f ] || kubeadm config images list > $f
+cat $f |sed -e 's/^/docker pull /g' -e 's#k8s.gcr.io#mirrorgooglecontainers#g' |bash -x
+docker images |grep mirrorgooglecontainers |awk '{print "docker tag ",$1":"$2,$1":"$2}' |sed -e 's#mirrorgooglecontainers#k8s.gcr.io#2' |bash -x
+docker images |grep mirrorgooglecontainers |awk '{print "docker rmi ", $1":"$2}' |bash -x
+dns=$(grep coredns $f)
+dldns=${dns/k8s.gcr.io/coredns}
+docker pull $dldns && docker tag $dldns $dns && docker rmi $dldns
+docker images

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# update Aliyun gpg key and repo
+curl -fsSL https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg | apt-key add -
+cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+deb http://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial main
+EOF
+apt-get update
+
+# this also install kubectl kubelet kube-proxy
+apt-get install -y kubeadm
+
