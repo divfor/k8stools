@@ -1,0 +1,131 @@
+#!/bin/bash
+proxy=${4:-"192.168.0.123:1080"}
+socks5_proxy=${4:-"127.0.0.1:1080"}
+
+COMMAND=$(basename $0)
+CURDIR=$(dirname $0)
+
+stop_web(){
+  sed -i '/https*_proxy/Id' /etc/environment
+  echo "Please exit & re-login, or copy & run blow commands to disable global web proxy:"
+  echo "unset HTTP_PROXY http_proxy HTTPS_PROXY https_proxy NO_PROXY no_proxy"
+  echo
+}
+
+start_web(){
+  echo "export http_proxy=http://$proxy" >> /etc/environment
+  echo "export https_proxy=http://$proxy" >> /etc/environment
+  echo "export HTTP_PROXY=http://$proxy" >> /etc/environment
+  echo "export HTTPS_PROXY=http://$proxy" >> /etc/environment
+  echo "no_proxy='127.0.0.1, localhost, 192.168.0.0/16, 172.31.0.0/16, 10.0.0.0/8'" >> /etc/environment
+  echo "NO_PROXY='127.0.0.1, localhost, 192.168.0.0/16, 172.31.0.0/16, 10.0.0.0/8'" >> /etc/environment
+  echo "Please exit & re-login, copy & run below commands to enable global web proxy:"
+  echo "export HTTP_PROXY=http://$proxy"
+  echo "export http_proxy=http://$proxy"
+  echo "export HTTPS_PROXY=http://$proxy"
+  echo "export https_proxy=http://$proxy"
+  echo "export no_proxy='127.0.0.1, localhost, 192.168.0.0/16, 172.31.0.0/16, 10.0.0.0/8'"
+  echo "export NO_PROXY='127.0.0.1, localhost, 192.168.0.0/16, 172.31.0.0/16, 10.0.0.0/8'"
+  echo
+}
+
+stop_apt(){
+  local f=/etc/apt/apt.conf
+  [ -f "$f" ] && sed -i "/Acquire.*${proxy}/d" $f
+  [ -f "$f" ] && echo "cat ${f}:" && cat $f
+}
+
+start_apt(){
+  local f=/etc/apt/apt.conf
+  mkdir -p $(dirname $f)
+  [ -f "$f" ] && sed -i "/Acquire.*${proxy}/d" $f
+  echo "Acquire::http::Proxy \"http://${proxy}\";" >> $f
+  echo "Acquire::https::Proxy \"http://${proxy}\";" >> $f
+  echo "cat ${f}:" && cat $f
+}
+
+stop_git(){
+  git config --global --unset http.proxy
+  git config --global --unset https.proxy
+  echo "git config --list:" && git config -l
+}
+
+start_git(){
+  git config --global http.proxy $proxy
+  git config --global https.proxy $proxy
+  echo "git config --list:" && git config -l
+}
+
+stop_pip(){
+  local f=~/.pip/pip.conf
+  [ -f $f ] && sed -i '/proxy/d' $f
+  [ -f $f ] && echo "cat ${f}:" && cat $f
+}
+
+start_pip(){
+  local f=~/.pip/pip.conf
+  mkdir -p $(dirname $f)
+  [ -f $f ] || echo '[global]' > $f
+  sed -i '/proxy/d' $f
+  echo "proxy=$proxy" >> $f
+  echo "cat ${f}:" && cat $f
+}
+
+stop_docker(){
+  s=${1:-"both"}
+  [[ ! $s =~ ^(http|https|socks5|all)$ ]] && { usage; exit 1; }
+  d=" /etc/systemd/system/docker.service.d/"
+  reload="no"
+  for schema in ${s/all/http https socks5}; do
+    cfile="$d/${schema}-proxy.conf"
+    [ -f $cfile ] || continue
+    echo -n "Deleting $d/${schema}-proxy.conf ......"
+    rm -rf $d/${schema}-proxy.conf && echo " done"
+    reload="yes"
+  done
+  if [ "$reload" == "yes" ]; then
+    echo -n "systemctl daemon-reload  ... " && systemctl daemon-reload && echo done
+    echo -n "systemctl restart docker ... " && systemctl restart docker && echo done
+  fi
+}
+
+start_docker(){
+  s=${1:-"both"}
+  [[ ! $s =~ ^(http|https|socks5|all)$ ]] && { usage; exit 1; }
+  d=" /etc/systemd/system/docker.service.d/"
+  mkdir -p $d
+  for schema in ${s/all/http https socks5}; do
+    cfile="$d/${schema}-proxy.conf"
+    echo "[Service]" > $cfile
+    if [ "$schema" = "socks5" ]; then
+      echo "Environment=\"ALL_PROXY=socks5://${socks5_proxy}\"" >> $cfile
+    else
+      echo "Environment=\"${schema^^}_PROXY=http://${proxy}/\"" >> $cfile
+    fi
+    echo "cat $cfile:" && cat $cfile
+  done
+  echo -n "systemctl daemon-reload  ... " && systemctl daemon-reload && echo done
+  echo -n "systemctl restart docker ... " && systemctl restart docker && echo done
+}
+
+usage(){
+  echo "Usage: $COMMAND start|stop pip|git|apt|web"
+  echo "Usage: $COMMAND start|stop docker http|https|socks5|all [proxy:port]"
+  echo "Usage: $COMMAND start|stop all"
+}
+
+act=$1
+app=$2
+shift 2
+arg=$*
+
+[[ $act =~ ^(start|stop)$ ]] ||  { usage; exit 1; }
+[[ $app =~ ^(all|web|docker|pip|git|apt|apt)$ ]] ||  { usage; exit 1; }
+
+for i in ${app/all/pip git apt docker web}; do
+  echo "Processing $i:"
+  ${act}_$i $arg
+  echo "-----------------------------------------------------"
+  echo
+done
+
