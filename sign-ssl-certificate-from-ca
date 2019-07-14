@@ -1,0 +1,21 @@
+#!/bin/bash
+#https://jamielinux.com/docs/openssl-certificate-authority/sign-server-and-client-certificates.html
+usage="
+Usage: $0 domain_name Examples:
+  $0 ca.crt ca.key www.a.com
+  $0 ca.crt ca.key *.b.com
+" 
+cacrt="$1" cakey="$2"
+d="$3" # domain common name
+f="${d//\*/wildcard}" # key file name by common name
+e="admin@${d##\*\.}"  # email by pure common name
+
+if [[ $d =~ .+\..* ]]; then
+  openssl x509 -req -CA ${cacrt} -CAkey ${cakey} -CAcreateserial \
+  -newkey rsa:4096 -nodes \
+  -keyout ${f}.key -days 3650 \
+  -out ${f}.crt \
+  -subj "/C=CN/ST=BJ/L=Chaoyang/O=MyCompany/OU=QA/CN=${d}/emailAddress=${e}/"
+else
+  echo "$usage"
+fi

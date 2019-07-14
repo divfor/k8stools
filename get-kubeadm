@@ -9,4 +9,4 @@ apt-get update
 
 # this also install kubectl kubelet kube-proxy
 apt-get install -y kubeadm
-
+apt-mark hold kubeadm kubelet kubectl
